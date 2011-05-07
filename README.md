@@ -1,17 +1,17 @@
-# Installation #
+# Installation
 
-Your .emacs now needs something like this:
+Your ```.emacs``` file now needs something like this:
 
-  (add-to-list 'load-path "/path/to/tramp-adb")
-  (require 'tramp-adb)
+     (add-to-list 'load-path "/path/to/tramp-adb")
+     (require 'tramp-adb)
 
 Ensure the path to the SDK directory is configured:
 
-  (customize-variable 'tramp-adb-sdk-dir)  
+    (customize-variable 'tramp-adb-sdk-dir)  
 
-# Usage # 
+# Usage 
 
-  (find-file "/adb::/")
+    (find-file "/adb::/")
 
 # Screenshot
 
