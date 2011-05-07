@@ -14,6 +14,10 @@ Ensure the path to the SDK directory is configured:
     (find-file "/adb::/")
 
 # Screenshot
+ 
+Access Files on Android device using Emacs Dired mode:
+
+![Emacs Dired accessing Files via TRAMP](tramp-adb/raw/master/res/emacs-dired.png) 
 
 # TODOs and Limitations #
 
