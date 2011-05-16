@@ -55,11 +55,13 @@
     (file-name-directory . tramp-handle-file-name-directory)
     (file-name-nondirectory . tramp-handle-file-name-nondirectory)
     (file-newer-than-file-p . tramp-handle-file-newer-than-file-p)
+    (file-name-as-directory . tramp-handle-file-name-as-directory)
     (file-regular-p . tramp-handle-file-regular-p)
     (file-remote-p . tramp-handle-file-remote-p)
     (file-directory-p . tramp-adb-handle-file-directory-p)
     (file-symlink-p . tramp-handle-file-symlink-p)
     (file-exists-p . tramp-adb-handle-file-exists-p)
+    (file-readable-p . tramp-handle-file-exists-p)
     (file-writable-p . tramp-adb-handle-file-writable-p)
     (file-local-copy . tramp-adb-handle-file-local-copy)
     (expand-file-name . tramp-adb-handle-expand-file-name)
@@ -112,11 +114,13 @@ pass to the OPERATION."
 	(tramp-message v 5 "%s -> %s" name r)
 	r))))
 
-;;; FIXME
 (defun tramp-adb-handle-file-directory-p (filename)
   "Like `file-directory-p' for Tramp files."
-  (and (file-exists-p filename)
-       (car (file-attributes filename))))
+  (let (symlink (file-symlink-p filename))
+    (if symlink
+	(tramp-adb-handle-file-directory-p symlink)
+      (and (file-exists-p filename)
+	   (car (file-attributes filename))))))
 
 (defun tramp-adb-handle-file-attributes (filename &optional id-format)
   "Like `file-attributes' for Tramp files."
@@ -134,7 +138,7 @@ pass to the OPERATION."
 		 (mod-string (nth 0 columns))
 		 (is-dir (eq ?d (aref mod-string 0)))
 		 (is-symlink (eq ?l (aref mod-string 0)))
-		 (symlink-target (and is-symlink (last (split-string (buffer-string) " -> "))))
+		 (symlink-target (and is-symlink (cadr (split-string (buffer-string) "\\( -> \\|\n\\)"))))
 		 (uid (nth 1 columns))
 		 (gid (nth 2 columns)) 
 		 (date (format "%s %s" (nth 4 columns) (nth 5 columns)))
