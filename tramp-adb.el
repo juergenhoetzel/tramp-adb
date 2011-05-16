@@ -252,7 +252,7 @@ pass to the OPERATION."
 	    (if (file-directory-p f) 
 		(file-name-as-directory f)
 	      f))
-	  (tramp-adb-handle-directory-files directory)))))))
+	  (directory-files directory)))))))
 
 (defun tramp-adb-handle-file-local-copy (filename)
   "Like `file-local-copy' for Tramp files."
