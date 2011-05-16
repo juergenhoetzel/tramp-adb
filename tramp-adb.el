@@ -22,7 +22,7 @@
 
 ;;; Code:
 
-(require 'tramp)
+(require 'tramp-sh)
 
 (defcustom tramp-adb-sdk-dir "~/Android/sdk"
   "Set to the directory containing the Android SDK."
