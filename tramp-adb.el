@@ -92,10 +92,7 @@ pass to the OPERATION."
   (let ((fn (assoc operation tramp-adb-file-name-handler-alist)))
     (if fn
 	(save-match-data (apply (cdr fn) args))
-      (progn
-	(with-current-buffer (get-buffer-create "my-buff")
-	  (insert (format "op: %s, args: %s\n" operation args)))
-	(tramp-run-real-handler operation args)))))
+      (tramp-run-real-handler operation args))))
 
 (defun tramp-adb-handle-expand-file-name (name &optional dir)
   "Like `expand-file-name' for Tramp files."
