@@ -394,7 +394,7 @@ connection if a previous connection has died for some reason."
 	    (tramp-message
 	     vec 6 "%s" (mapconcat 'identity (process-command p) " "))
 	    ;; wait for initial prompty
-	    (tramp-wait-for-regexp p nil "^.+[[:space:]]")
+	    (tramp-wait-for-regexp p nil "^[#\\$][[:space:]]+")
 	    (unless (eq 'run (process-status p))
 	      (tramp-error  vec 'file-error "Terminated!"))
 	    (tramp-send-command
