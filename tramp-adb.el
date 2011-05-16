@@ -106,11 +106,10 @@ pass to the OPERATION."
       (tramp-run-real-handler 'expand-file-name (list name nil))
     ;; Dissect NAME.
     (with-parsed-tramp-file-name name nil
-      (tramp-message v 5 "tramp-adb-handle-expand-file-name: %s" name)
       (unless (tramp-run-real-handler 'file-name-absolute-p (list localname))
 	(setq localname (concat "/" localname)))
       (let ((r (tramp-make-tramp-file-name "adb" nil nil localname )))
-	(tramp-message v 5 "tramp-adb-handle-expand-file-name returns: %s" r)
+	(tramp-message v 5 "%s -> %s" name r)
 	r))))
 
 ;;; FIXME
