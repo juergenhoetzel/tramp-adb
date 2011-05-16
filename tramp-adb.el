@@ -261,7 +261,7 @@ pass to the OPERATION."
       (tramp-error
        v 'file-error
        "Cannot make local copy of non-existing file `%s'" filename))
-    (let* ((adb-program (concat (file-name-as-directory tramp-adb-sdk-dir) "platform-tools/adb"))
+    (let* ((adb-program (expand-file-name "platform-tools/adb" (file-name-as-directory tramp-adb-sdk-dir)))
 	   (tmpfile (tramp-compat-make-temp-file filename))
 	   (fetch-command (concat adb-program " pull " (shell-quote-argument localname) " " (shell-quote-argument tmpfile))))
       (with-progress-reporter
@@ -328,7 +328,7 @@ pass to the OPERATION."
 
 (defun tramp-adb-execute-adb-command (&rest args)
   "Returns nil on success error-output on failure."
-  (let ((adb-program (concat (file-name-as-directory tramp-adb-sdk-dir) "platform-tools/adb")))
+  (let ((adb-program (expand-file-name "platform-tools/adb" (file-name-as-directory tramp-adb-sdk-dir))))
     (with-temp-buffer 
       (unless (zerop (apply 'call-process-shell-command adb-program nil t nil args))
 	(buffer-string)))))
@@ -380,7 +380,7 @@ Does not do anything if a connection is already open, but re-opens the
 connection if a previous connection has died for some reason."
   (let* ((buf (tramp-get-buffer vec))
 	 (p (get-buffer-process buf))
-	 (adb-program (concat (file-name-as-directory tramp-adb-sdk-dir) "platform-tools/adb")))
+	 (adb-program (expand-file-name "platform-tools/adb" (file-name-as-directory tramp-adb-sdk-dir))))
     (unless
 	(and p (processp p) (memq (process-status p) '(run open)))
       (save-match-data
