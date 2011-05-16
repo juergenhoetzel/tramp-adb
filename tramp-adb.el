@@ -127,7 +127,6 @@ pass to the OPERATION."
   (unless id-format (setq id-format 'integer))
   (with-parsed-tramp-file-name filename nil
     (with-file-property v localname (format "file-attributes-%s" id-format)
-      (tramp-message v 5 "adb: file attributes with ls: %s" localname)
       (tramp-adb-send-command
        v
        (format "ls -d -l %s" (tramp-shell-quote-argument localname)))
@@ -257,7 +256,6 @@ pass to the OPERATION."
 
 (defun tramp-adb-handle-file-local-copy (filename)
   "Like `file-local-copy' for Tramp files."
-  (tramp-message v 3 "tramp-adb-handle-file-local-copy  %s" filename)
   (with-parsed-tramp-file-name filename nil
     (unless (file-exists-p filename)
       (tramp-error
@@ -278,8 +276,7 @@ pass to the OPERATION."
 (defun tramp-adb-handle-file-writable-p (filename)
   (with-parsed-tramp-file-name filename nil
     ;; missing "test" command on Android devices
-    (tramp-message v 6 "tramp-adb-handle-file-writable-p: not implemented yet :%s" localname)
-    (tramp-message v 6 "tramp-adb-handle-file-writable-p: Assuming /data/data is writable" localname)
+    (tramp-message v 5 "not implemented yet (Assuming /data/data is writable) :%s" localname)
     (let ((rw-path "/data/data"))
       (and (>= (length localname) (length rw-path))
 	   (string= (substring localname 0 (length rw-path))
