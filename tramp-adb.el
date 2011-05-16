@@ -86,7 +86,7 @@
 
 ;;;###tramp-autoload
 (defun tramp-adb-file-name-handler (operation &rest args)
-  "Invoke the ADB-FTP handler for OPERATION.
+  "Invoke the ADB handler for OPERATION.
 First arg specifies the OPERATION, second arg is a list of arguments to
 pass to the OPERATION."
   (let ((fn (assoc operation tramp-adb-file-name-handler-alist)))
