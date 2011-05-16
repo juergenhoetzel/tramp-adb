@@ -29,17 +29,18 @@
   :type 'string
   :group 'tramp-adb)
 
+;;;###tramp-autoload
 (defconst tramp-adb-method "adb"
   "*When this method name is used, forward all calls to Android Debug Bridge.")
 
 (defconst tramp-adb-ls-errors (regexp-opt '("No such file or directory")))
 
+;;;###tramp-autoload
 (add-to-list 'tramp-methods `(,tramp-adb-method))
 
+;;;###tramp-autoload
 (add-to-list 'tramp-default-method-alist
 	     (list "\\`adb" nil tramp-adb-method))
-
-(add-to-list 'tramp-methods (cons tramp-adb-method nil))
 
 (add-to-list 'tramp-foreign-file-name-handler-alist
 	     (cons 'tramp-adb-file-name-p 'tramp-adb-file-name-handler))
@@ -77,11 +78,13 @@
     (rename-file . tramp-sh-handle-rename-file))	
   "Alist of handler functions for Tramp ADB method.")
 
+;;;###tramp-autoload
 (defun tramp-adb-file-name-p (filename)
   "Check if it's a filename for ADB."
   (let ((v (tramp-dissect-file-name filename)))
     (string= (tramp-file-name-method v) tramp-adb-method)))
 
+;;;###tramp-autoload
 (defun tramp-adb-file-name-handler (operation &rest args)
   "Invoke the ADB-FTP handler for OPERATION.
 First arg specifies the OPERATION, second arg is a list of arguments to
