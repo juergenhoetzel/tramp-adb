@@ -208,7 +208,7 @@ pass to the OPERATION."
   (setq dir (expand-file-name dir))
   (with-parsed-tramp-file-name dir nil
     (when parents
-      (tramp-message v 6 "mkdir doesn't handle \"-p\" switch: mkdir \"%s\"" (tramp-shell-quote-argument localname)))
+      (tramp-message v 5 "mkdir doesn't handle \"-p\" switch: mkdir \"%s\"" (tramp-shell-quote-argument localname)))
     (save-excursion
       (tramp-barf-unless-okay
        v (format "%s %s"
