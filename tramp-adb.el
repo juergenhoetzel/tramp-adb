@@ -20,6 +20,17 @@
 
 ;;; Commentary:
 
+;; In order to activate this package, perform the following steps:
+;;
+;; - Add a symlink into the Tramp directory
+;;   ln -s /path/to/this/tramp-adb.el /path/to/tramp/lisp/tramp-adb.el
+;;
+;; - Regenerate tramp-loaddefs.el
+;;   cd /path/to/tramp; rm lisp/tramp-loaddefs.el; make
+;;
+;; - Add the following form into your .emacs
+;;   (setq tramp-adb-sdk-dir "/path/to/android/sdk")
+
 ;;; Code:
 
 (require 'tramp-sh)
