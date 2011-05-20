@@ -42,6 +42,7 @@
 (add-to-list 'tramp-default-method-alist
 	     (list "\\`adb" nil tramp-adb-method))
 
+;;;###tramp-autoload
 (add-to-list 'tramp-foreign-file-name-handler-alist
 	     (cons 'tramp-adb-file-name-p 'tramp-adb-file-name-handler))
 
@@ -77,7 +78,7 @@
     (unhandled-file-name-directory . tramp-handle-unhandled-file-name-directory)
     (vc-registered . ignore)	;no  vc control files on Android devices
     (write-region . tramp-adb-handle-write-region)
-    (rename-file . tramp-sh-handle-rename-file))	
+    (rename-file . tramp-sh-handle-rename-file))
   "Alist of handler functions for Tramp ADB method.")
 
 ;;;###tramp-autoload
@@ -139,10 +140,10 @@ pass to the OPERATION."
 		 (is-symlink (eq ?l (aref mod-string 0)))
 		 (symlink-target (and is-symlink (cadr (split-string (buffer-string) "\\( -> \\|\n\\)"))))
 		 (uid (nth 1 columns))
-		 (gid (nth 2 columns)) 
+		 (gid (nth 2 columns))
 		 (date (format "%s %s" (nth 4 columns) (nth 5 columns)))
 		 (size (string-to-int (nth 3 columns))))
-	    (list 
+	    (list
 	     (or is-dir symlink-target)
 	     1 					;link-count
 	     ;; no way to handle numeric ids in Androids ash
@@ -160,10 +161,10 @@ pass to the OPERATION."
   (switches)
   "Almquist shell can't handle multiple arguments. Convert (\"-al\") to (\"-a\" \"-l\")"
   (split-string (apply 'concat (mapcar (lambda (s)
-					 (replace-regexp-in-string "\\(.\\)"  " -\\1" 
-								   (replace-regexp-in-string "^-" "" s))) 
+					 (replace-regexp-in-string "\\(.\\)"  " -\\1"
+								   (replace-regexp-in-string "^-" "" s)))
 				       ;; FIXME: Warning about removed switches (long and non-dash)
-				       (remove-if (lambda (s) 
+				       (remove-if (lambda (s)
 						    (string-match  "\\(^--\\|^[^-]\\)" s)) switches)))))
 
 
@@ -176,7 +177,7 @@ pass to the OPERATION."
     (when (member "-t" switches)
       (setq switches (delete "-t" switches))
       (tramp-message v 1 "adb: ls can't handle \"-t\" switch"))
-    (let ((cmd (format "ls %s \"%s\"" (mapconcat 'identity switches " ") 
+    (let ((cmd (format "ls %s \"%s\"" (mapconcat 'identity switches " ")
 		       localname)))
       (tramp-adb-send-command v cmd)
       (insert
@@ -194,7 +195,7 @@ pass to the OPERATION."
 (defun tramp-adb-handle-directory-files (dir &optional full match nosort files-only)
   "Like `directory-files' for Tramp files."
   (with-parsed-tramp-file-name dir nil
-    (tramp-adb-send-command 
+    (tramp-adb-send-command
      v (format "%s %s"
 	       "ls"
 	       (tramp-shell-quote-argument localname)))
@@ -249,7 +250,7 @@ pass to the OPERATION."
        (save-match-data
 	 (mapcar
 	  (lambda (f)
-	    (if (file-directory-p f) 
+	    (if (file-directory-p f)
 		(file-name-as-directory f)
 	      f))
 	  (directory-files directory)))))))
@@ -329,7 +330,7 @@ pass to the OPERATION."
 (defun tramp-adb-execute-adb-command (&rest args)
   "Returns nil on success error-output on failure."
   (let ((adb-program (expand-file-name "platform-tools/adb" (file-name-as-directory tramp-adb-sdk-dir))))
-    (with-temp-buffer 
+    (with-temp-buffer
       (unless (zerop (apply 'call-process-shell-command adb-program nil t nil args))
 	(buffer-string)))))
 
