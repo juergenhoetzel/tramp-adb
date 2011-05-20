@@ -184,24 +184,44 @@ pass to the OPERATION."
   "Like `insert-directory' for Tramp files."
   (when (stringp switches)
     (setq switches (tramp-adb--gnu-switches-to-ash (split-string switches))))
+  ;; FIXME: tramp-adb-handle-expand-file-name does not handle name/. and name/..
   (with-parsed-tramp-file-name (expand-file-name filename) nil
     (when (member "-t" switches)
       (setq switches (delete "-t" switches))
       (tramp-message v 1 "adb: ls can't handle \"-t\" switch"))
-    (let ((cmd (format "ls %s \"%s\"" (mapconcat 'identity switches " ")
-		       localname)))
-      (tramp-adb-send-command v cmd)
-      (insert
-       (with-current-buffer (tramp-get-buffer v)
-	 (buffer-string)))
+    (let ((cmd (format "ls %s %%s" (mapconcat 'identity switches " ")))
+	  (name (tramp-shell-quote-argument (file-name-as-directory localname))))
+      (dolist (string
+	       (list (concat "-d " name ".")
+		     (concat "-d " name "..")
+		     name))
+	(tramp-adb-send-command v (format cmd string))
+	(insert
+	 (with-current-buffer (tramp-get-buffer v)
+	   (buffer-string))))
       (tramp-adb-sh-fix-ls-outout))))
 
 (defun tramp-adb-sh-fix-ls-outout ()
-  "Andorids ls command doesn't insert size column for directories: Emacs dired can't find files. Insert dummy 0 in empty size columns."
+  "Androids ls command doesn't insert size column for directories: Emacs dired can't find files. Insert dummy 0 in empty size columns."
   (save-excursion
+    ;; Insert missing size.
     (goto-char (point-min))
-    (while (search-forward-regexp  "[[:space:]]\\([[:space:]][0-9]\\{4\\}-[0-9][0-9]-[0-9][0-9][[:space:]]\\)"  nil t)
-      (replace-match "0\\1" "\\1"  nil  ))))
+    (while (search-forward-regexp "[[:space:]]\\([[:space:]][0-9]\\{4\\}-[0-9][0-9]-[0-9][0-9][[:space:]]\\)" nil t)
+      (replace-match "0\\1" "\\1" nil))
+    ;; Sort entries.
+    (let* ((lines (split-string (buffer-string) "\n" t))
+	   (sorted-lines
+	    (sort
+	     lines
+	     (lambda (a b)
+	       (let (posa posb)
+		 (string-match dired-move-to-filename-regexp a)
+		 (setq posa (match-end 0))
+		 (string-match dired-move-to-filename-regexp b)
+		 (setq posb (match-end 0))
+		 (string-lessp (substring a posa) (substring b posb)))))))
+      (delete-region (point-min) (point-max))
+      (insert "  " (mapconcat 'identity sorted-lines "\n  ")))))
 
 (defun tramp-adb-handle-directory-files (dir &optional full match nosort files-only)
   "Like `directory-files' for Tramp files."
@@ -415,4 +435,3 @@ connection if a previous connection has died for some reason."
 
 (provide 'tramp-adb)
 ;;; tramp-adb.el ends here
-
