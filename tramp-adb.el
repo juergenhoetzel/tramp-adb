@@ -219,14 +219,16 @@ pass to the OPERATION."
       (insert "  " (mapconcat 'identity sorted-lines "\n  ")))))
 
 (defun tramp-adb-ls-output-time-less-p (a b)
+  "Sort \"ls\" output by time, descending."
   (let (time-a time-b)
     (string-match tramp-adb-ls-date-regexp a)
     (setq time-a (apply 'encode-time (parse-time-string (match-string 0 a))))
     (string-match tramp-adb-ls-date-regexp b)
     (setq time-b (apply 'encode-time (parse-time-string (match-string 0 b))))
-    (time-less-p time-a time-b)))
+    (time-less-p time-b time-a)))
 
 (defun tramp-adb-ls-output-name-less-p (a b)
+  "Sort \"ls\" output by name, ascending."
   (let (posa posb)
     (string-match dired-move-to-filename-regexp a)
     (setq posa (match-end 0))
