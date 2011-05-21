@@ -46,6 +46,8 @@
 
 (defconst tramp-adb-ls-errors (regexp-opt '("No such file or directory")))
 
+(defconst tramp-adb-ls-date-regexp "[[:space:]][0-9]\\{4\\}-[0-9][0-9]-[0-9][0-9][[:space:]][0-9][0-9]:[0-9][0-9][[:space:]]")
+
 ;;;###tramp-autoload
 (add-to-list 'tramp-methods `(,tramp-adb-method))
 
@@ -144,7 +146,7 @@ pass to the OPERATION."
        (format "ls -d -l %s" (tramp-shell-quote-argument localname)))
       (with-current-buffer (tramp-get-buffer v)
 	(unless (string-match tramp-adb-ls-errors (buffer-string))
-	  (tramp-adb-sh-fix-ls-outout)
+	  (tramp-adb-sh-fix-ls-output)
 	  (let* ((columns (split-string (buffer-string)))
 		 (mod-string (nth 0 columns))
 		 (is-dir (eq ?d (aref mod-string 0)))
@@ -186,10 +188,7 @@ pass to the OPERATION."
     (setq switches (tramp-adb--gnu-switches-to-ash (split-string switches))))
   ;; FIXME: tramp-adb-handle-expand-file-name does not handle name/. and name/..
   (with-parsed-tramp-file-name (expand-file-name filename) nil
-    (when (member "-t" switches)
-      (setq switches (delete "-t" switches))
-      (tramp-message v 1 "adb: ls can't handle \"-t\" switch"))
-    (let ((cmd (format "ls %s %%s" (mapconcat 'identity switches " ")))
+    (let ((cmd (format "ls %s %%s" (mapconcat 'identity (remove "-t" switches) " ")))
 	  (name (tramp-shell-quote-argument (file-name-as-directory localname))))
       (dolist (string
 	       (list (concat "-d " name ".")
@@ -199,9 +198,9 @@ pass to the OPERATION."
 	(insert
 	 (with-current-buffer (tramp-get-buffer v)
 	   (buffer-string))))
-      (tramp-adb-sh-fix-ls-outout))))
+      (tramp-adb-sh-fix-ls-output (member "-t" switches)))))
 
-(defun tramp-adb-sh-fix-ls-outout ()
+(defun tramp-adb-sh-fix-ls-output (&optional sort-by-time)
   "Androids ls command doesn't insert size column for directories: Emacs dired can't find files. Insert dummy 0 in empty size columns."
   (save-excursion
     ;; Insert missing size.
@@ -213,15 +212,27 @@ pass to the OPERATION."
 	   (sorted-lines
 	    (sort
 	     lines
-	     (lambda (a b)
-	       (let (posa posb)
-		 (string-match dired-move-to-filename-regexp a)
-		 (setq posa (match-end 0))
-		 (string-match dired-move-to-filename-regexp b)
-		 (setq posb (match-end 0))
-		 (string-lessp (substring a posa) (substring b posb)))))))
+	     (if sort-by-time
+		 'tramp-adb-ls-output-time-less-p
+	       'tramp-adb-ls-output-name-less-p))))
       (delete-region (point-min) (point-max))
       (insert "  " (mapconcat 'identity sorted-lines "\n  ")))))
+
+(defun tramp-adb-ls-output-time-less-p (a b)
+  (let (time-a time-b)
+    (string-match tramp-adb-ls-date-regexp a)
+    (setq time-a (apply 'encode-time (parse-time-string (match-string 0 a))))
+    (string-match tramp-adb-ls-date-regexp b)
+    (setq time-b (apply 'encode-time (parse-time-string (match-string 0 b))))
+    (time-less-p time-a time-b)))
+
+(defun tramp-adb-ls-output-name-less-p (a b)
+  (let (posa posb)
+    (string-match dired-move-to-filename-regexp a)
+    (setq posa (match-end 0))
+    (string-match dired-move-to-filename-regexp b)
+    (setq posb (match-end 0))
+    (string-lessp (substring a posa) (substring b posb))))
 
 (defun tramp-adb-handle-directory-files (dir &optional full match nosort files-only)
   "Like `directory-files' for Tramp files."
