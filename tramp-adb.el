@@ -44,7 +44,10 @@
 (defconst tramp-adb-method "adb"
   "*When this method name is used, forward all calls to Android Debug Bridge.")
 
-(defconst tramp-adb-ls-errors (regexp-opt '("No such file or directory")))
+(defconst tramp-adb-ls-errors
+  "Error strings returned by the \"ls\" command."
+  (regexp-opt '("No such file or directory"
+		"opendir failed, Permission denied")))
 
 (defconst tramp-adb-ls-date-regexp "[[:space:]][0-9]\\{4\\}-[0-9][0-9]-[0-9][0-9][[:space:]][0-9][0-9]:[0-9][0-9][[:space:]]")
 
@@ -188,16 +191,22 @@ pass to the OPERATION."
     (setq switches (tramp-adb--gnu-switches-to-ash (split-string switches))))
   ;; FIXME: tramp-adb-handle-expand-file-name does not handle name/. and name/..
   (with-parsed-tramp-file-name (expand-file-name filename) nil
-    (let ((cmd (format "ls %s %%s" (mapconcat 'identity (remove "-t" switches) " ")))
-	  (name (tramp-shell-quote-argument (file-name-as-directory localname))))
+    (let ((cmd (format "ls %s "
+		       (mapconcat 'identity (remove "-t" switches) " ")))
+	  (name
+	   (tramp-shell-quote-argument (file-name-as-directory localname))))
+      ;; We insert also filename/. and filename/.., because "ls" doesn't.
       (dolist (string
 	       (list (concat "-d " name ".")
 		     (concat "-d " name "..")
 		     name))
-	(tramp-adb-send-command v (format cmd string))
-	(insert
-	 (with-current-buffer (tramp-get-buffer v)
-	   (buffer-string))))
+	(tramp-adb-send-command v (concat cmd string))
+	(let ((result
+	       (with-current-buffer (tramp-get-buffer v) (buffer-string))))
+	  (when (string-match tramp-adb-ls-errors result)
+	    (tramp-error
+	     v 'file-error "%s: %s" (match-string 0 result) localname))
+	  (insert result)))
       (tramp-adb-sh-fix-ls-output (member "-t" switches)))))
 
 (defun tramp-adb-sh-fix-ls-output (&optional sort-by-time)
