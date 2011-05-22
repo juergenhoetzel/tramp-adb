@@ -45,9 +45,9 @@
   "*When this method name is used, forward all calls to Android Debug Bridge.")
 
 (defconst tramp-adb-ls-errors
-  "Error strings returned by the \"ls\" command."
   (regexp-opt '("No such file or directory"
-		"opendir failed, Permission denied")))
+		"opendir failed, Permission denied"))
+  "Error strings returned by the \"ls\" command.")
 
 (defconst tramp-adb-ls-date-regexp "[[:space:]][0-9]\\{4\\}-[0-9][0-9]-[0-9][0-9][[:space:]][0-9][0-9]:[0-9][0-9][[:space:]]")
 
