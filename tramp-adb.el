@@ -113,6 +113,11 @@ pass to the OPERATION."
 	(save-match-data (apply (cdr fn) args))
       (tramp-run-real-handler operation args))))
 
+;; This cannot be a constant, because `tramp-adb-sdk-dir' is customizable.
+(defun tramp-adb-program ()
+  "The Android Debug Bridge."
+  (expand-file-name "platform-tools/adb" tramp-adb-sdk-dir))
+
 (defun tramp-adb-handle-expand-file-name (name &optional dir)
   "Like `expand-file-name' for Tramp files."
   ;; If DIR is not given, use DEFAULT-DIRECTORY or "/".
@@ -315,11 +320,14 @@ pass to the OPERATION."
       (tramp-error
        v 'file-error
        "Cannot make local copy of non-existing file `%s'" filename))
-    (let* ((adb-program (expand-file-name "platform-tools/adb" (file-name-as-directory tramp-adb-sdk-dir)))
-	   (tmpfile (tramp-compat-make-temp-file filename))
-	   (fetch-command (concat adb-program " pull " (shell-quote-argument localname) " " (shell-quote-argument tmpfile))))
+    (let* ((tmpfile (tramp-compat-make-temp-file filename))
+	   (fetch-command (format "%s pull %s %s"
+				  (tramp-adb-program)
+				  (shell-quote-argument localname)
+				  (shell-quote-argument tmpfile))))
       (with-progress-reporter
-	  v 3 (format "Fetching %s to tmp file %s, using command: %s" filename tmpfile fetch-command)
+	  v 3 (format "Fetching %s to tmp file %s, using command: %s"
+		      filename tmpfile fetch-command)
 	(unless (shell-command  fetch-command)
 	  ;;FIXME On Error we shall cleanup.
 	  (delete-file tmpfile)
@@ -382,10 +390,10 @@ pass to the OPERATION."
 
 (defun tramp-adb-execute-adb-command (&rest args)
   "Returns nil on success error-output on failure."
-  (let ((adb-program (expand-file-name "platform-tools/adb" (file-name-as-directory tramp-adb-sdk-dir))))
-    (with-temp-buffer
-      (unless (zerop (apply 'call-process-shell-command adb-program nil t nil args))
-	(buffer-string)))))
+  (with-temp-buffer
+    (unless (zerop (apply 'call-process-shell-command
+			  (tramp-adb-program) nil t nil args))
+      (buffer-string))))
 
 ;; Connection functions
 
@@ -433,8 +441,7 @@ Returns nil if there has been an error message from adb."
 Does not do anything if a connection is already open, but re-opens the
 connection if a previous connection has died for some reason."
   (let* ((buf (tramp-get-buffer vec))
-	 (p (get-buffer-process buf))
-	 (adb-program (expand-file-name "platform-tools/adb" (file-name-as-directory tramp-adb-sdk-dir))))
+	 (p (get-buffer-process buf)))
     (unless
 	(and p (processp p) (memq (process-status p) '(run open)))
       (save-match-data
@@ -444,7 +451,8 @@ connection if a previous connection has died for some reason."
 		 (process-connection-type tramp-process-connection-type)
 		 (p (let ((default-directory
 			    (tramp-compat-temporary-file-directory)))
-		      (start-process (tramp-buffer-name vec) (tramp-get-buffer vec) adb-program "shell"))))
+		      (start-process (tramp-buffer-name vec) buf
+				     (tramp-adb-program) "shell"))))
 	    (tramp-message
 	     vec 6 "%s" (mapconcat 'identity (process-command p) " "))
 	    ;; wait for initial prompty
