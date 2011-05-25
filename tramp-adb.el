@@ -408,8 +408,12 @@ Returns nil if there has been an error message from adb."
   (with-current-buffer (tramp-get-connection-buffer vec)
     (save-excursion
       (goto-char (point-min))
-      ;; we can't use stty to disable echo of command
-      (delete-matching-lines (regexp-quote command)))))
+      ;; We can't use stty to disable echo of command.
+      (delete-matching-lines (regexp-quote command))
+      ;; When the local machine is W32, there are still trailing ^M.
+      ;; There must be a better solution by setting the correct coding
+      ;; system, but this requires changes in core Tramp.
+      (replace-regexp "\r+$" "" nil (point-min) (point-max)))))
 
 (defun tramp-adb-wait-for-output (proc &optional timeout)
   "Wait for output from remote command."
