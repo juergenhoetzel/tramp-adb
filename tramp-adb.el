@@ -55,10 +55,6 @@
 (add-to-list 'tramp-methods `(,tramp-adb-method))
 
 ;;;###tramp-autoload
-(add-to-list 'tramp-default-method-alist
-	     (list "\\`adb" nil tramp-adb-method))
-
-;;;###tramp-autoload
 (add-to-list 'tramp-foreign-file-name-handler-alist
 	     (cons 'tramp-adb-file-name-p 'tramp-adb-file-name-handler))
 
