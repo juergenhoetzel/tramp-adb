@@ -28,8 +28,6 @@ Access Files on Android device using Emacs Dired mode:
 ## Tramp Handlers
 
 * ```tramp-adb-handle-make-directory```: Handle parents
-* ```tramp-adb-handle-insert-directory```: ls doesn't list "." and ".."
-* ```tramp-adb-handle-insert-directory```: ls can't sort (using '-t' switch)
 * ```tramp-adb-maybe-open-connection ```: use (tramp-file-name-host vec) to select device
 
 
