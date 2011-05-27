@@ -419,16 +419,10 @@ pass to the OPERATION."
       (tramp-error
        v 'file-error
        "Cannot make local copy of non-existing file `%s'" filename))
-    (let* ((tmpfile (tramp-compat-make-temp-file filename))
-	   (fetch-command (format "%s pull %s %s"
-				  (tramp-adb-program)
-				  (shell-quote-argument localname)
-				  (shell-quote-argument tmpfile))))
+    (let ((tmpfile (tramp-compat-make-temp-file filename)))
       (with-progress-reporter
-	  v 3 (format "Fetching %s to tmp file %s, using command: %s"
-		      filename tmpfile fetch-command)
-	(unless (shell-command  fetch-command)
-	  ;;FIXME On Error we shall cleanup.
+	  v 3 (format "Fetching %s to tmp file %s" filename tmpfile)
+	(when (tramp-adb-execute-adb-command v "pull" localname tmpfile)
 	  (delete-file tmpfile)
 	  (tramp-error
 	   v 'file-error "Cannot make local copy of file `%s'" filename)))
@@ -467,10 +461,9 @@ pass to the OPERATION."
       (with-progress-reporter
 	  v 3 (format "Moving tmp file %s to %s" tmpfile filename)
 	(unwind-protect
-	    (let ((e (tramp-adb-execute-adb-command "push" (shell-quote-argument tmpfile) (shell-quote-argument localname))))
-	      (delete-file tmpfile)
-	      (when e
-		(tramp-error v 'file-error "Cannot write: `%s'" e)))))
+	    (when (tramp-adb-execute-adb-command v "push" tmpfile localname)
+	      (tramp-error v 'file-error "Cannot write: `%s' filename"))
+	  (delete-file tmpfile)))
 
       (unless (equal curbuf (current-buffer))
 	(tramp-error
@@ -487,12 +480,17 @@ pass to the OPERATION."
 
 ;; Helper functions
 
-(defun tramp-adb-execute-adb-command (&rest args)
+(defun tramp-adb-execute-adb-command (vec &rest args)
   "Returns nil on success error-output on failure."
+  (when (tramp-file-name-host vec)
+    (setq args (append (list "-s" (tramp-file-name-host vec)) args)))
   (with-temp-buffer
-    (unless (zerop (apply 'call-process-shell-command
-			  (tramp-adb-program) nil t nil args))
-      (buffer-string))))
+    (prog1
+	(unless (zerop (apply 'call-process (tramp-adb-program) nil t nil args))
+	  (buffer-string))
+      (tramp-message
+       vec 6 "%s %s\n%s"
+       (tramp-adb-program) (mapconcat 'identity args " ") (buffer-string)))))
 
 ;; Connection functions
 
