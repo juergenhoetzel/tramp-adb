@@ -144,11 +144,10 @@ pass to the OPERATION."
 
 (defun tramp-adb-handle-file-directory-p (filename)
   "Like `file-directory-p' for Tramp files."
-  (let (symlink (file-symlink-p filename))
-    (if symlink
-	(tramp-adb-handle-file-directory-p symlink)
-      (and (file-exists-p filename)
-	   (car (file-attributes filename))))))
+  (let ((symlink (file-symlink-p filename)))
+    (if (stringp symlink)
+	(file-directory-p symlink)
+      (car (file-attributes filename)))))
 
 ;; This is derived from `tramp-sh-handle-file-truename'.  Maybe the
 ;; code could be shared?
@@ -340,9 +339,7 @@ pass to the OPERATION."
   "Like `directory-files' for Tramp files."
   (with-parsed-tramp-file-name dir nil
     (tramp-adb-send-command
-     v (format "%s %s"
-	       "ls"
-	       (tramp-shell-quote-argument localname)))
+     v (format "ls %s" (tramp-shell-quote-argument localname)))
     (with-current-buffer (tramp-get-buffer v)
       (remove-if (lambda (l) (string-match  "^[[:space:]]*$" l))
 		 (split-string (buffer-string) "\n")))))
@@ -466,7 +463,7 @@ pass to the OPERATION."
   "Like `file-exists-p' for Tramp files."
   (with-parsed-tramp-file-name filename nil
     (with-file-property v localname "file-exists-p"
-      (tramp-adb-handle-file-attributes filename))))
+      (file-attributes filename))))
 
 ;; Helper functions
 
