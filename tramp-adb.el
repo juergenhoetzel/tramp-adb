@@ -129,9 +129,18 @@ pass to the OPERATION."
     (with-parsed-tramp-file-name name nil
       (unless (tramp-run-real-handler 'file-name-absolute-p (list localname))
 	(setq localname (concat "/" localname)))
-      (let ((r (tramp-make-tramp-file-name "adb" nil nil localname )))
-	(tramp-message v 5 "%s -> %s" name r)
-	r))))
+      ;; Do normal `expand-file-name' (this does "/./" and "/../").
+      ;; We bind `directory-sep-char' here for XEmacs on Windows,
+      ;; which would otherwise use backslash.  `default-directory' is
+      ;; bound, because on Windows there would be problems with UNC
+      ;; shares or Cygwin mounts.
+      (let ((directory-sep-char ?/)
+	    (default-directory (tramp-compat-temporary-file-directory)))
+	(tramp-make-tramp-file-name
+	 method user host
+	 (tramp-drop-volume-letter
+	  (tramp-run-real-handler
+	   'expand-file-name (list localname))))))))
 
 (defun tramp-adb-handle-file-directory-p (filename)
   "Like `file-directory-p' for Tramp files."
@@ -272,7 +281,6 @@ pass to the OPERATION."
   "Like `insert-directory' for Tramp files."
   (when (stringp switches)
     (setq switches (tramp-adb--gnu-switches-to-ash (split-string switches))))
-  ;; FIXME: tramp-adb-handle-expand-file-name does not handle name/. and name/..
   (with-parsed-tramp-file-name (expand-file-name filename) nil
     (let ((cmd (format "ls %s "
 		       (mapconcat 'identity (remove "-t" switches) " ")))
