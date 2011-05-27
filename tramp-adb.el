@@ -105,7 +105,13 @@
   "Invoke the ADB handler for OPERATION.
 First arg specifies the OPERATION, second arg is a list of arguments to
 pass to the OPERATION."
-  (let ((fn (assoc operation tramp-adb-file-name-handler-alist)))
+  (let ((fn (assoc operation tramp-adb-file-name-handler-alist))
+	;; `tramp-default-host's default value is (system-name).  Not
+	;; useful for us.
+	(tramp-default-host
+	 (unless (equal (eval (car (get 'tramp-default-host 'standard-value)))
+			tramp-default-host)
+	   tramp-default-host)))
     (if fn
 	(save-match-data (apply (cdr fn) args))
       (tramp-run-real-handler operation args))))
@@ -548,13 +554,16 @@ connection if a previous connection has died for some reason."
 	(with-progress-reporter vec 3 "Opening adb shell connection"
 	  (let* ((coding-system-for-read 'utf-8-dos) ;is this correct?
 		 (process-connection-type tramp-process-connection-type)
+		 (args (if (tramp-file-name-host vec)
+			   (list "-s" (tramp-file-name-host vec) "shell")
+			 (list "shell")))
 		 (p (let ((default-directory
 			    (tramp-compat-temporary-file-directory)))
-		      (start-process (tramp-buffer-name vec) buf
-				     (tramp-adb-program) "shell"))))
+		      (apply 'start-process (tramp-buffer-name vec) buf
+			     (tramp-adb-program) args))))
 	    (tramp-message
 	     vec 6 "%s" (mapconcat 'identity (process-command p) " "))
-	    ;; wait for initial prompty
+	    ;; Wait for initial prompt.
 	    (tramp-wait-for-regexp p nil "^[#\\$][[:space:]]+")
 	    (unless (eq 'run (process-status p))
 	      (tramp-error  vec 'file-error "Terminated!"))
