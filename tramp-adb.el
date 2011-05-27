@@ -54,6 +54,10 @@
 ;;;###tramp-autoload
 (add-to-list 'tramp-methods `(,tramp-adb-method))
 
+(eval-after-load 'tramp
+  '(tramp-set-completion-function
+    tramp-adb-method '((tramp-adb-parse-device-names ""))))
+
 ;;;###tramp-autoload
 (add-to-list 'tramp-foreign-file-name-handler-alist
 	     (cons 'tramp-adb-file-name-p 'tramp-adb-file-name-handler))
@@ -120,6 +124,16 @@ pass to the OPERATION."
 (defun tramp-adb-program ()
   "The Android Debug Bridge."
   (expand-file-name "platform-tools/adb" tramp-adb-sdk-dir))
+
+(defun tramp-adb-parse-device-names (ignore)
+  "Return a list of (nil host) tuples allowed to access."
+  (with-temp-buffer
+    (when (zerop (call-process (tramp-adb-program) nil t nil "devices"))
+      (let (result)
+	(goto-char (point-min))
+	(while (search-forward-regexp "^\\(\\S-+\\)[[:space:]]+device$" nil t)
+	  (add-to-list 'result (list nil (match-string 1))))
+	result))))
 
 (defun tramp-adb-handle-expand-file-name (name &optional dir)
   "Like `expand-file-name' for Tramp files."
