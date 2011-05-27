@@ -229,8 +229,7 @@ pass to the OPERATION."
   (with-parsed-tramp-file-name filename nil
     (with-file-property v localname (format "file-attributes-%s" id-format)
       (tramp-adb-send-command
-       v
-       (format "ls -d -l %s" (tramp-shell-quote-argument localname)))
+       v (format "ls -d -l %s" (tramp-shell-quote-argument localname)))
       (with-current-buffer (tramp-get-buffer v)
 	(unless (string-match tramp-adb-ls-errors (buffer-string))
 	  (tramp-adb-sh-fix-ls-output)
@@ -345,14 +344,12 @@ pass to the OPERATION."
   (setq dir (expand-file-name dir))
   (with-parsed-tramp-file-name dir nil
     (when parents
-      (tramp-message v 5 "mkdir doesn't handle \"-p\" switch: mkdir \"%s\"" (tramp-shell-quote-argument localname)))
-    (save-excursion
-      (tramp-barf-unless-okay
-       v (format "%s %s"
-		 "mkdir"
-		 (tramp-shell-quote-argument localname))
-       "Couldn't make directory %s" dir)
-    (tramp-flush-directory-property v (file-name-directory localname)))))
+      (tramp-message
+       v 5 "mkdir doesn't handle \"-p\" switch: mkdir \"%s\"" localname))
+    (tramp-adb-barf-unless-okay
+     v (format "mkdir %s" (tramp-shell-quote-argument localname))
+     "Couldn't make directory %s" dir)
+    (tramp-flush-directory-property v (file-name-directory localname))))
 
 (defun tramp-adb-handle-delete-directory (directory &optional recursive)
   "Like `delete-directory' for Tramp files."
@@ -360,7 +357,7 @@ pass to the OPERATION."
   (with-parsed-tramp-file-name directory nil
     (tramp-flush-file-property v (file-name-directory localname))
     (tramp-flush-directory-property v localname)
-    (tramp-barf-unless-okay
+    (tramp-adb-barf-unless-okay
      v (format "%s %s"
 	       (if recursive "rm -r" "rmdir")
 	       (tramp-shell-quote-argument localname))
@@ -372,10 +369,8 @@ pass to the OPERATION."
   (with-parsed-tramp-file-name filename nil
     (tramp-flush-file-property v (file-name-directory localname))
     (tramp-flush-file-property v localname)
-    (tramp-barf-unless-okay
-     v (format "%s %s"
-	       (or (and trash (tramp-get-remote-trash v)) "rm")
-	       (tramp-shell-quote-argument localname))
+    (tramp-adb-barf-unless-okay
+     v (format "rm %s" (tramp-shell-quote-argument localname))
      "Couldn't delete %s" filename)))
 
 (defun tramp-adb-handle-file-name-all-completions (filename directory)
@@ -477,8 +472,7 @@ pass to the OPERATION."
 ;; Connection functions
 
 (defun tramp-adb-send-command (vec command)
-  "Send the COMMAND to connection VEC.
-Returns nil if there has been an error message from adb."
+  "Send the COMMAND to connection VEC."
   (tramp-adb-maybe-open-connection vec)
   (tramp-message vec 6 "%s" command)
   (tramp-send-string vec command)
@@ -492,7 +486,24 @@ Returns nil if there has been an error message from adb."
       ;; When the local machine is W32, there are still trailing ^M.
       ;; There must be a better solution by setting the correct coding
       ;; system, but this requires changes in core Tramp.
-      (replace-regexp "\r+$" "" nil (point-min) (point-max)))))
+      (goto-char (point-min))
+      (while (re-search-forward "\r+$" nil t)
+	(replace-match "" nil nil)))))
+
+(defun tramp-adb-barf-unless-okay (vec command fmt &rest args)
+  "Run COMMAND, check exit status, throw error if exit status not okay.
+FMT and ARGS are passed to `error'."
+  (tramp-adb-send-command vec (format "%s; echo tramp_exit_status $?" command))
+  (with-current-buffer (tramp-get-connection-buffer vec)
+    (goto-char (point-max))
+    (unless (re-search-backward "tramp_exit_status [0-9]+" nil t)
+      (tramp-error
+       vec 'file-error "Couldn't find exit status of `%s'" command))
+    (skip-chars-forward "^ ")
+    (unless (zerop (read (current-buffer)))
+      (apply 'tramp-error vec 'file-error fmt args))
+    (let (buffer-read-only)
+      (delete-region (match-beginning 0) (point-max)))))
 
 (defun tramp-adb-wait-for-output (proc &optional timeout)
   "Wait for output from remote command."
