@@ -54,6 +54,7 @@
 ;;;###tramp-autoload
 (add-to-list 'tramp-methods `(,tramp-adb-method))
 
+;;;###tramp-autoload
 (eval-after-load 'tramp
   '(tramp-set-completion-function
     tramp-adb-method '((tramp-adb-parse-device-names ""))))
@@ -125,6 +126,7 @@ pass to the OPERATION."
   "The Android Debug Bridge."
   (expand-file-name "platform-tools/adb" tramp-adb-sdk-dir))
 
+;;;###tramp-autoload
 (defun tramp-adb-parse-device-names (ignore)
   "Return a list of (nil host) tuples allowed to access."
   (with-temp-buffer
