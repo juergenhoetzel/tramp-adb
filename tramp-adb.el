@@ -83,6 +83,7 @@
     (file-readable-p . tramp-handle-file-exists-p)
     (file-writable-p . tramp-adb-handle-file-writable-p)
     (file-local-copy . tramp-adb-handle-file-local-copy)
+    (file-modes . tramp-handle-file-modes)
     (expand-file-name . tramp-adb-handle-expand-file-name)
     (find-backup-file-name . tramp-handle-find-backup-file-name)
     (directory-files . tramp-adb-handle-directory-files)
@@ -96,6 +97,7 @@
     (unhandled-file-name-directory . tramp-handle-unhandled-file-name-directory)
     (vc-registered . ignore)	;no  vc control files on Android devices
     (write-region . tramp-adb-handle-write-region)
+    (set-file-modes . tramp-adb-handle-set-file-modes)
     (rename-file . tramp-sh-handle-rename-file))
   "Alist of handler functions for Tramp ADB method.")
 
@@ -471,6 +473,14 @@ pass to the OPERATION."
 	(tramp-error
 	 v 'file-error
 	 "Buffer has changed from `%s' to `%s'" curbuf (current-buffer))))))
+
+(defun tramp-adb-handle-set-file-modes (filename mode)
+  "Like `set-file-modes' for Tramp files."
+  (with-parsed-tramp-file-name filename nil
+    (tramp-flush-file-property v localname)
+    (tramp-adb-barf-unless-okay
+     v (format "chmod %s %s" (tramp-compat-decimal-to-octal mode) localname)
+     "Error while changing file's mode %s" filename)))
 
 ;;; Android doesn't provide test command
 
