@@ -98,6 +98,8 @@
     (vc-registered . ignore)	;no  vc control files on Android devices
     (write-region . tramp-adb-handle-write-region)
     (set-file-modes . tramp-adb-handle-set-file-modes)
+    (set-file-times . ignore)
+    (copy-file . tramp-adb-handle-copy-file)
     (rename-file . tramp-sh-handle-rename-file))
   "Alist of handler functions for Tramp ADB method.")
 
@@ -429,7 +431,8 @@ pass to the OPERATION."
 	(when (tramp-adb-execute-adb-command v "pull" localname tmpfile)
 	  (delete-file tmpfile)
 	  (tramp-error
-	   v 'file-error "Cannot make local copy of file `%s'" filename)))
+	   v 'file-error "Cannot make local copy of file `%s'" filename))
+	(set-file-modes tmpfile (file-modes filename)))
       tmpfile)))
 
 (defun tramp-adb-handle-file-writable-p (filename)
@@ -481,6 +484,48 @@ pass to the OPERATION."
     (tramp-adb-barf-unless-okay
      v (format "chmod %s %s" (tramp-compat-decimal-to-octal mode) localname)
      "Error while changing file's mode %s" filename)))
+
+(defun tramp-adb-handle-copy-file
+  (filename newname &optional ok-if-already-exists keep-date
+	    preserve-uid-gid preserve-selinux-context)
+  "Like `copy-file' for Tramp files.
+PRESERVE-UID-GID and PRESERVE-SELINUX-CONTEXT are completely ignored."
+  (setq filename (expand-file-name filename)
+	newname (expand-file-name newname))
+  (with-progress-reporter
+      (tramp-dissect-file-name (if (file-remote-p filename) filename newname))
+      0 (format "Copying %s to %s" filename newname)
+
+    (let ((tmpfile (file-local-copy filename)))
+
+      (if tmpfile
+	  ;; Remote filename.
+	  (condition-case err
+	      (rename-file tmpfile newname ok-if-already-exists)
+	    ((error quit)
+	     (delete-file tmpfile)
+	     (signal (car err) (cdr err))))
+
+	;; Remote newname.
+	(when (file-directory-p newname)
+	  (setq newname
+		(expand-file-name (file-name-nondirectory filename) newname)))
+
+	(with-parsed-tramp-file-name newname nil
+	  (when (and (not ok-if-already-exists)
+		     (file-exists-p newname))
+	    (tramp-error v 'file-already-exists newname))
+
+	  ;; We must also flush the cache of the directory, because
+	  ;; `file-attributes' reads the values from there.
+	  (tramp-flush-file-property v (file-name-directory localname))
+	  (tramp-flush-file-property v localname)
+	  (when (tramp-adb-execute-adb-command v "push" filename localname)
+	    (tramp-error
+	     v 'file-error "Cannot copy `%s' `%s'" filename newname))))))
+
+  ;; KEEP-DATE handling.
+  (when keep-date (set-file-times newname (nth 5 (file-attributes filename)))))
 
 ;;; Android doesn't provide test command
 
