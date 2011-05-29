@@ -296,7 +296,6 @@ pass to the OPERATION."
 				       (remove-if (lambda (s)
 						    (string-match  "\\(^--\\|^[^-]\\)" s)) switches)))))
 
-
 (defun tramp-adb-handle-insert-directory
   (filename switches &optional wildcard full-directory-p)
   "Like `insert-directory' for Tramp files."
@@ -499,40 +498,44 @@ pass to the OPERATION."
 PRESERVE-UID-GID and PRESERVE-SELINUX-CONTEXT are completely ignored."
   (setq filename (expand-file-name filename)
 	newname (expand-file-name newname))
-  (with-progress-reporter
-      (tramp-dissect-file-name (if (file-remote-p filename) filename newname))
-      0 (format "Copying %s to %s" filename newname)
 
-    (let ((tmpfile (file-local-copy filename)))
+  (if (file-directory-p filename)
+      (copy-directory filename keep-date)
+    (with-progress-reporter
+	(tramp-dissect-file-name (if (file-remote-p filename) filename newname))
+	0 (format "Copying %s to %s" filename newname)
 
-      (if tmpfile
-	  ;; Remote filename.
-	  (condition-case err
-	      (rename-file tmpfile newname ok-if-already-exists)
-	    ((error quit)
-	     (delete-file tmpfile)
-	     (signal (car err) (cdr err))))
+      (let ((tmpfile (file-local-copy filename)))
 
-	;; Remote newname.
-	(when (file-directory-p newname)
-	  (setq newname
-		(expand-file-name (file-name-nondirectory filename) newname)))
+	(if tmpfile
+	    ;; Remote filename.
+	    (condition-case err
+		(rename-file tmpfile newname ok-if-already-exists)
+	      ((error quit)
+	       (delete-file tmpfile)
+	       (signal (car err) (cdr err))))
 
-	(with-parsed-tramp-file-name newname nil
-	  (when (and (not ok-if-already-exists)
-		     (file-exists-p newname))
-	    (tramp-error v 'file-already-exists newname))
+	  ;; Remote newname.
+	  (when (file-directory-p newname)
+	    (setq newname
+		  (expand-file-name (file-name-nondirectory filename) newname)))
 
-	  ;; We must also flush the cache of the directory, because
-	  ;; `file-attributes' reads the values from there.
-	  (tramp-flush-file-property v (file-name-directory localname))
-	  (tramp-flush-file-property v localname)
-	  (when (tramp-adb-execute-adb-command v "push" filename localname)
-	    (tramp-error
-	     v 'file-error "Cannot copy `%s' `%s'" filename newname))))))
+	  (with-parsed-tramp-file-name newname nil
+	    (when (and (not ok-if-already-exists)
+		       (file-exists-p newname))
+	      (tramp-error v 'file-already-exists newname))
 
-  ;; KEEP-DATE handling.
-  (when keep-date (set-file-times newname (nth 5 (file-attributes filename)))))
+	    ;; We must also flush the cache of the directory, because
+	    ;; `file-attributes' reads the values from there.
+	    (tramp-flush-file-property v (file-name-directory localname))
+	    (tramp-flush-file-property v localname)
+	    (when (tramp-adb-execute-adb-command v "push" filename localname)
+	      (tramp-error
+	       v 'file-error "Cannot copy `%s' `%s'" filename newname))))))
+
+    ;; KEEP-DATE handling.
+    (when keep-date
+      (set-file-times newname (nth 5 (file-attributes filename))))))
 
 (defun tramp-adb-handle-rename-file
   (filename newname &optional ok-if-already-exists)
@@ -544,7 +547,8 @@ PRESERVE-UID-GID and PRESERVE-SELINUX-CONTEXT are completely ignored."
       (if (file-remote-p filename) filename newname) nil
     (with-progress-reporter v 0 (format "Renaming %s to %s" newname filename)
 
-      (if (tramp-equal-remote filename newname)
+      (if (and (tramp-equal-remote filename newname)
+	       (not (file-directory-p filename)))
 	  (progn
 	    (when (and (not ok-if-already-exists)
 		       (file-exists-p newname))
