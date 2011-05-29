@@ -44,11 +44,6 @@
 (defconst tramp-adb-method "adb"
   "*When this method name is used, forward all calls to Android Debug Bridge.")
 
-(defconst tramp-adb-ls-errors
-  (regexp-opt '("No such file or directory"
-		"opendir failed, Permission denied"))
-  "Error strings returned by the \"ls\" command.")
-
 (defconst tramp-adb-ls-date-regexp "[[:space:]][0-9]\\{4\\}-[0-9][0-9]-[0-9][0-9][[:space:]][0-9][0-9]:[0-9][0-9][[:space:]]")
 
 ;;;###tramp-autoload
@@ -260,35 +255,36 @@ pass to the OPERATION."
 (defun tramp-adb-handle-file-attributes (filename &optional id-format)
   "Like `file-attributes' for Tramp files."
   (unless id-format (setq id-format 'integer))
-  (with-parsed-tramp-file-name filename nil
-    (with-file-property v localname (format "file-attributes-%s" id-format)
-      (tramp-adb-send-command
-       v (format "ls -d -l %s" (tramp-shell-quote-argument localname)))
-      (with-current-buffer (tramp-get-buffer v)
-	(unless (string-match tramp-adb-ls-errors (buffer-string))
-	  (tramp-adb-sh-fix-ls-output)
-	  (let* ((columns (split-string (buffer-string)))
-		 (mod-string (nth 0 columns))
-		 (is-dir (eq ?d (aref mod-string 0)))
-		 (is-symlink (eq ?l (aref mod-string 0)))
-		 (symlink-target (and is-symlink (cadr (split-string (buffer-string) "\\( -> \\|\n\\)"))))
-		 (uid (nth 1 columns))
-		 (gid (nth 2 columns))
-		 (date (format "%s %s" (nth 4 columns) (nth 5 columns)))
-		 (size (string-to-int (nth 3 columns))))
-	    (list
-	     (or is-dir symlink-target)
-	     1 					;link-count
-	     ;; no way to handle numeric ids in Androids ash
-	     (if (eq id-format 'integer) 0 uid)
-	     (if (eq id-format 'integer) 0 gid)
-	     '(0 0) ; atime
-	     (date-to-time date) ; mtime
-	     '(0 0) ; ctime
-	     size
-	     mod-string
-	     ;; fake
-	     t 1 1)))))))
+  (ignore-errors
+    (with-parsed-tramp-file-name filename nil
+      (with-file-property v localname (format "file-attributes-%s" id-format)
+	(tramp-adb-barf-unless-okay
+	 v (format "ls -d -l %s" (tramp-shell-quote-argument localname)) "")
+	(with-current-buffer (tramp-get-buffer v)
+	  (unless (string-match tramp-adb-ls-errors (buffer-string))
+	    (tramp-adb-sh-fix-ls-output)
+	    (let* ((columns (split-string (buffer-string)))
+		   (mod-string (nth 0 columns))
+		   (is-dir (eq ?d (aref mod-string 0)))
+		   (is-symlink (eq ?l (aref mod-string 0)))
+		   (symlink-target (and is-symlink (cadr (split-string (buffer-string) "\\( -> \\|\n\\)"))))
+		   (uid (nth 1 columns))
+		   (gid (nth 2 columns))
+		   (date (format "%s %s" (nth 4 columns) (nth 5 columns)))
+		   (size (string-to-int (nth 3 columns))))
+	      (list
+	       (or is-dir symlink-target)
+	       1 					;link-count
+	       ;; no way to handle numeric ids in Androids ash
+	       (if (eq id-format 'integer) 0 uid)
+	       (if (eq id-format 'integer) 0 gid)
+	       '(0 0) ; atime
+	       (date-to-time date) ; mtime
+	       '(0 0) ; ctime
+	       size
+	       mod-string
+	       ;; fake
+	       t 1 1))))))))
 
 (defun tramp-adb--gnu-switches-to-ash
   (switches)
@@ -307,23 +303,25 @@ pass to the OPERATION."
   (when (stringp switches)
     (setq switches (tramp-adb--gnu-switches-to-ash (split-string switches))))
   (with-parsed-tramp-file-name (expand-file-name filename) nil
-    (let ((cmd (format "ls %s "
-		       (mapconcat 'identity (remove "-t" switches) " ")))
-	  (name
-	   (tramp-shell-quote-argument (file-name-as-directory localname))))
-      ;; We insert also filename/. and filename/.., because "ls" doesn't.
-      (dolist (string
-	       (list (concat "-d " name ".")
-		     (concat "-d " name "..")
-		     name))
-	(tramp-adb-send-command v (concat cmd string))
-	(let ((result
-	       (with-current-buffer (tramp-get-buffer v) (buffer-string))))
-	  (when (string-match tramp-adb-ls-errors result)
-	    (tramp-error
-	     v 'file-error "%s: %s" (match-string 0 result) localname))
-	  (insert result)))
-      (tramp-adb-sh-fix-ls-output (member "-t" switches)))))
+    (let ((name (tramp-shell-quote-argument (directory-file-name localname)))
+	  (switch-d (member "-d" switches))
+	  (switch-t (member "-t" switches))
+	  (switches (mapconcat 'identity (remove "-t" switches) " ")))
+      (tramp-adb-barf-unless-okay
+       v (format "ls %s %s" switches name)
+       "Cannot insert directory listing: %s" filename)
+      (insert (with-current-buffer (tramp-get-buffer v) (buffer-string)))
+      (unless  switch-d
+	;; We insert also filename/. and filename/.., because "ls" doesn't.
+	(ignore-errors
+	  (tramp-adb-barf-unless-okay
+	   v (format "ls -d %s %s %s"
+		     switches
+		     (concat (file-name-as-directory name) ".")
+		     (concat (file-name-as-directory name) ".."))
+	   "Cannot insert directory listing: %s" filename)
+	  (insert (with-current-buffer (tramp-get-buffer v) (buffer-string)))))
+      (tramp-adb-sh-fix-ls-output switch-t))))
 
 (defun tramp-adb-sh-fix-ls-output (&optional sort-by-time)
   "Androids ls command doesn't insert size column for directories: Emacs dired can't find files. Insert dummy 0 in empty size columns."
@@ -331,7 +329,11 @@ pass to the OPERATION."
     ;; Insert missing size.
     (goto-char (point-min))
     (while (search-forward-regexp "[[:space:]]\\([[:space:]][0-9]\\{4\\}-[0-9][0-9]-[0-9][0-9][[:space:]]\\)" nil t)
-      (replace-match "0\\1" "\\1" nil))
+      (replace-match "0\\1" "\\1" nil)
+      ;; Insert missing "/".
+      (when (looking-at "[0-9][0-9]:[0-9][0-9][[:space:]]+$")
+	(end-of-line)
+	(insert "/")))
     ;; Sort entries.
     (let* ((lines (split-string (buffer-string) "\n" t))
 	   (sorted-lines
@@ -341,7 +343,12 @@ pass to the OPERATION."
 		 'tramp-adb-ls-output-time-less-p
 	       'tramp-adb-ls-output-name-less-p))))
       (delete-region (point-min) (point-max))
-      (insert "  " (mapconcat 'identity sorted-lines "\n  ")))))
+      (insert "  " (mapconcat 'identity sorted-lines "\n  ")))
+    ;; Add final newline.
+    (goto-char (point-max))
+    (unless (= (point) (line-beginning-position))
+      (insert "\n"))))
+
 
 (defun tramp-adb-ls-output-time-less-p (a b)
   "Sort \"ls\" output by time, descending."
