@@ -33,7 +33,7 @@
 
 ;;; Code:
 
-(require 'tramp-sh)
+(require 'tramp)
 
 (defcustom tramp-adb-sdk-dir "~/Android/sdk"
   "Set to the directory containing the Android SDK."
@@ -100,7 +100,7 @@
     (set-file-modes . tramp-adb-handle-set-file-modes)
     (set-file-times . ignore)
     (copy-file . tramp-adb-handle-copy-file)
-    (rename-file . tramp-sh-handle-rename-file))
+    (rename-file . tramp-adb-handle-rename-file))
   "Alist of handler functions for Tramp ADB method.")
 
 ;;;###tramp-autoload
@@ -527,7 +527,35 @@ PRESERVE-UID-GID and PRESERVE-SELINUX-CONTEXT are completely ignored."
   ;; KEEP-DATE handling.
   (when keep-date (set-file-times newname (nth 5 (file-attributes filename)))))
 
-;;; Android doesn't provide test command
+(defun tramp-adb-handle-rename-file
+  (filename newname &optional ok-if-already-exists)
+  "Like `rename-file' for Tramp files."
+  (setq filename (expand-file-name filename)
+	newname (expand-file-name newname))
+
+  (with-parsed-tramp-file-name
+      (if (file-remote-p filename) filename newname) nil
+    (with-progress-reporter v 0 (format "Renaming %s to %s" newname filename)
+
+      (if (tramp-equal-remote filename newname)
+	  (progn
+	    (when (and (not ok-if-already-exists)
+		       (file-exists-p newname))
+	      (tramp-error v 'file-already-exists newname))
+	    ;; We must also flush the cache of the directory, because
+	    ;; `file-attributes' reads the values from there.
+	    (tramp-flush-file-property v (file-name-directory localname))
+	    (tramp-flush-file-property v localname)
+	    ;; Short track.
+	    (tramp-adb-barf-unless-okay
+	     v (format "mv %s %s" (file-remote-p filename 'localname) localname)
+	     "Error renaming %s to %s" filename newname))
+
+	;; Rename by copy.
+	(copy-file filename newname ok-if-already-exists t t)
+	(delete-file filename)))))
+
+;; Android doesn't provide test command
 
 (defun tramp-adb-handle-file-exists-p (filename)
   "Like `file-exists-p' for Tramp files."
