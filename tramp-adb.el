@@ -44,6 +44,9 @@
 (defconst tramp-adb-method "adb"
   "*When this method name is used, forward all calls to Android Debug Bridge.")
 
+(defconst tramp-adb-prompt "^[#\\$][[:space:]]+"
+  "Regexp used as prompt in ADB shell.")
+
 (defconst tramp-adb-ls-date-regexp "[[:space:]][0-9]\\{4\\}-[0-9][0-9]-[0-9][0-9][[:space:]][0-9][0-9]:[0-9][0-9][[:space:]]")
 
 ;;;###tramp-autoload
@@ -261,30 +264,29 @@ pass to the OPERATION."
 	(tramp-adb-barf-unless-okay
 	 v (format "ls -d -l %s" (tramp-shell-quote-argument localname)) "")
 	(with-current-buffer (tramp-get-buffer v)
-	  (unless (string-match tramp-adb-ls-errors (buffer-string))
-	    (tramp-adb-sh-fix-ls-output)
-	    (let* ((columns (split-string (buffer-string)))
-		   (mod-string (nth 0 columns))
-		   (is-dir (eq ?d (aref mod-string 0)))
-		   (is-symlink (eq ?l (aref mod-string 0)))
-		   (symlink-target (and is-symlink (cadr (split-string (buffer-string) "\\( -> \\|\n\\)"))))
-		   (uid (nth 1 columns))
-		   (gid (nth 2 columns))
-		   (date (format "%s %s" (nth 4 columns) (nth 5 columns)))
-		   (size (string-to-int (nth 3 columns))))
-	      (list
-	       (or is-dir symlink-target)
-	       1 					;link-count
-	       ;; no way to handle numeric ids in Androids ash
-	       (if (eq id-format 'integer) 0 uid)
-	       (if (eq id-format 'integer) 0 gid)
-	       '(0 0) ; atime
-	       (date-to-time date) ; mtime
-	       '(0 0) ; ctime
-	       size
-	       mod-string
-	       ;; fake
-	       t 1 1))))))))
+	  (tramp-adb-sh-fix-ls-output)
+	  (let* ((columns (split-string (buffer-string)))
+		 (mod-string (nth 0 columns))
+		 (is-dir (eq ?d (aref mod-string 0)))
+		 (is-symlink (eq ?l (aref mod-string 0)))
+		 (symlink-target (and is-symlink (cadr (split-string (buffer-string) "\\( -> \\|\n\\)"))))
+		 (uid (nth 1 columns))
+		 (gid (nth 2 columns))
+		 (date (format "%s %s" (nth 4 columns) (nth 5 columns)))
+		 (size (string-to-int (nth 3 columns))))
+	    (list
+	     (or is-dir symlink-target)
+	     1 					;link-count
+	     ;; no way to handle numeric ids in Androids ash
+	     (if (eq id-format 'integer) 0 uid)
+	     (if (eq id-format 'integer) 0 gid)
+	     '(0 0) ; atime
+	     (date-to-time date) ; mtime
+	     '(0 0) ; ctime
+	     size
+	     mod-string
+	     ;; fake
+	     t 1 1)))))))
 
 (defun tramp-adb--gnu-switches-to-ash
   (switches)
@@ -630,24 +632,24 @@ FMT and ARGS are passed to `error'."
     (delete-process proc)
     (tramp-error proc 'file-error "Process `%s' not available, try again" proc))
   (with-current-buffer (process-buffer proc)
-    (if (tramp-wait-for-regexp proc timeout (regexp-quote tramp-end-of-output))
+    (if (tramp-wait-for-regexp proc timeout tramp-adb-prompt)
 	(let (buffer-read-only)
 	  (goto-char (point-min))
-	  (when (search-forward tramp-end-of-output (point-at-eol) t)
+	  (when (search-forward tramp-adb-prompt (point-at-eol) t)
 	    (forward-line 1)
 	    (delete-region (point-min) (point)))
 	  ;; Delete the prompt.
 	  (goto-char (point-max))
-	  (search-backward tramp-end-of-output nil t)
+	  (search-backward tramp-adb-prompt nil t)
 	  (delete-region (point) (point-max)))
       (if timeout
 	  (tramp-error
 	   proc 'file-error
 	   "[[Remote adb prompt `%s' not found in %d secs]]"
-	   tramp-end-of-output timeout)
+	   tramp-adb-prompt timeout)
 	(tramp-error
 	 proc 'file-error
-	 "[[Remote prompt `%s' not found]]" tramp-end-of-output)))))
+	 "[[Remote prompt `%s' not found]]" tramp-adb-prompt)))))
 
 (defun tramp-adb-maybe-open-connection (vec)
   "Maybe open a connection VEC.
@@ -672,11 +674,9 @@ connection if a previous connection has died for some reason."
 	    (tramp-message
 	     vec 6 "%s" (mapconcat 'identity (process-command p) " "))
 	    ;; Wait for initial prompt.
-	    (tramp-wait-for-regexp p nil "^[#\\$][[:space:]]+")
+	    (tramp-adb-wait-for-output p)
 	    (unless (eq 'run (process-status p))
 	      (tramp-error  vec 'file-error "Terminated!"))
-	    (tramp-send-command
-	     vec (format "PS1=%s" (shell-quote-argument tramp-end-of-output)) t)
 	    (set-process-query-on-exit-flag p nil)))))))
 
 (provide 'tramp-adb)
