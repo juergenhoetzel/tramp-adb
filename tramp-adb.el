@@ -502,7 +502,7 @@ PRESERVE-UID-GID and PRESERVE-SELINUX-CONTEXT are completely ignored."
 	newname (expand-file-name newname))
 
   (if (file-directory-p filename)
-      (copy-directory filename keep-date)
+      (copy-directory filename newname keep-date)
     (with-progress-reporter
 	(tramp-dissect-file-name (if (file-remote-p filename) filename newname))
 	0 (format "Copying %s to %s" filename newname)
