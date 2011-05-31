@@ -99,7 +99,8 @@
     (set-file-times . ignore)
     (copy-file . tramp-adb-handle-copy-file)
     (rename-file . tramp-adb-handle-rename-file)
-    (process-file . tramp-adb-handle-process-file))
+    (process-file . tramp-adb-handle-process-file)
+    (shell-command . tramp-adb-handle-shell-command))
   "Alist of handler functions for Tramp ADB method.")
 
 ;;;###tramp-autoload
@@ -686,6 +687,82 @@ PRESERVE-UID-GID and PRESERVE-SELINUX-CONTEXT are completely ignored."
       (if (equal ret -1)
 	  (keyboard-quit)
 	ret))))
+
+(defun tramp-adb-handle-shell-command
+  (command &optional output-buffer error-buffer)
+  "Like `shell-command' for Tramp files."
+  (let* ((asynchronous (string-match "[ \t]*&[ \t]*\\'" command))
+	 ;; We cannot use `shell-file-name' and `shell-command-switch',
+	 ;; they are variables of the local host.
+	 (args (list "sh" "-c" (substring command 0 asynchronous)))
+	 current-buffer-p
+	 (output-buffer
+	  (cond
+	   ((bufferp output-buffer) output-buffer)
+	   ((stringp output-buffer) (get-buffer-create output-buffer))
+	   (output-buffer
+	    (setq current-buffer-p t)
+	    (current-buffer))
+	   (t (get-buffer-create
+	       (if asynchronous
+		   "*Async Shell Command*"
+		 "*Shell Command Output*")))))
+	 (error-buffer
+	  (cond
+	   ((bufferp error-buffer) error-buffer)
+	   ((stringp error-buffer) (get-buffer-create error-buffer))))
+	 (buffer
+	  (if (and (not asynchronous) error-buffer)
+	      (with-parsed-tramp-file-name default-directory nil
+		(list output-buffer (tramp-make-tramp-temp-file v)))
+	    output-buffer))
+	 (p (get-buffer-process output-buffer)))
+
+    ;; Check whether there is another process running.  Tramp does not
+    ;; support 2 (asynchronous) processes in parallel.
+    (when p
+      (if (yes-or-no-p "A command is running.  Kill it? ")
+	  (ignore-errors (kill-process p))
+	(error "Shell command in progress")))
+
+    (if current-buffer-p
+	(progn
+	  (barf-if-buffer-read-only)
+	  (push-mark nil t))
+      (with-current-buffer output-buffer
+	(setq buffer-read-only nil)
+	(erase-buffer)))
+
+    (if (and (not current-buffer-p) (integerp asynchronous))
+	(prog1
+	    ;; Run the process.
+	    (apply 'start-file-process "*Async Shell*" buffer args)
+	  ;; Display output.
+	  (pop-to-buffer output-buffer)
+	  (setq mode-line-process '(":%s"))
+	  (shell-mode))
+
+      (prog1
+	  ;; Run the process.
+	  (apply 'process-file (car args) nil buffer nil (cdr args))
+	;; Insert error messages if they were separated.
+	(when (listp buffer)
+	  (with-current-buffer error-buffer
+	    (insert-file-contents (cadr buffer)))
+	  (delete-file (cadr buffer)))
+	(if current-buffer-p
+	    ;; This is like exchange-point-and-mark, but doesn't
+	    ;; activate the mark.  It is cleaner to avoid activation,
+	    ;; even though the command loop would deactivate the mark
+	    ;; because we inserted text.
+	    (goto-char (prog1 (mark t)
+			 (set-marker (mark-marker) (point)
+				     (current-buffer))))
+	  ;; There's some output, display it.
+	  (when (with-current-buffer output-buffer (> (point-max) (point-min)))
+	    (if (functionp 'display-message-or-buffer)
+		(tramp-compat-funcall 'display-message-or-buffer output-buffer)
+	      (pop-to-buffer output-buffer))))))))
 
 ;; Android doesn't provide test command
 
