@@ -290,13 +290,18 @@ pass to the OPERATION."
 
 (defun tramp-adb--gnu-switches-to-ash
   (switches)
-  "Almquist shell can't handle multiple arguments. Convert (\"-al\") to (\"-a\" \"-l\")"
-  (split-string (apply 'concat (mapcar (lambda (s)
-					 (replace-regexp-in-string "\\(.\\)"  " -\\1"
-								   (replace-regexp-in-string "^-" "" s)))
-				       ;; FIXME: Warning about removed switches (long and non-dash)
-				       (remove-if (lambda (s)
-						    (string-match  "\\(^--\\|^[^-]\\)" s)) switches)))))
+  "Almquist shell can't handle multiple arguments.
+Convert (\"-al\") to (\"-a\" \"-l\").  Remove arguments like \"--dired\"."
+  (split-string
+   (apply 'concat
+	  (mapcar (lambda (s)
+		    (replace-regexp-in-string
+		     "\\(.\\)"  " -\\1"
+		     (replace-regexp-in-string "^-" "" s)))
+		  ;; FIXME: Warning about removed switches (long and non-dash).
+		  (remove-if
+		   (lambda (s) (string-match "\\(^--\\|^[^-]\\)" s))
+		   switches)))))
 
 (defun tramp-adb-handle-insert-directory
   (filename switches &optional wildcard full-directory-p)
@@ -304,25 +309,27 @@ pass to the OPERATION."
   (when (stringp switches)
     (setq switches (tramp-adb--gnu-switches-to-ash (split-string switches))))
   (with-parsed-tramp-file-name (expand-file-name filename) nil
-    (let ((name (tramp-shell-quote-argument (directory-file-name localname)))
-	  (switch-d (member "-d" switches))
-	  (switch-t (member "-t" switches))
-	  (switches (mapconcat 'identity (remove "-t" switches) " ")))
-      (tramp-adb-barf-unless-okay
-       v (format "ls %s %s" switches name)
-       "Cannot insert directory listing: %s" filename)
-      (insert (with-current-buffer (tramp-get-buffer v) (buffer-string)))
-      (unless  switch-d
-	;; We insert also filename/. and filename/.., because "ls" doesn't.
-	(ignore-errors
-	  (tramp-adb-barf-unless-okay
-	   v (format "ls -d %s %s %s"
-		     switches
-		     (concat (file-name-as-directory name) ".")
-		     (concat (file-name-as-directory name) ".."))
-	   "Cannot insert directory listing: %s" filename)
-	  (insert (with-current-buffer (tramp-get-buffer v) (buffer-string)))))
-      (tramp-adb-sh-fix-ls-output switch-t))))
+    (with-current-buffer (tramp-get-buffer v)
+      (let ((name (tramp-shell-quote-argument (directory-file-name localname)))
+	    (switch-d (member "-d" switches))
+	    (switch-t (member "-t" switches))
+	    (switches (mapconcat 'identity (remove "-t" switches) " ")))
+	(tramp-adb-barf-unless-okay
+	 v (format "ls %s %s" switches name)
+	 "Cannot insert directory listing: %s" filename)
+	(unless switch-d
+	  ;; We insert also filename/. and filename/.., because "ls" doesn't.
+	  (narrow-to-region (point) (point))
+	  (ignore-errors
+	    (tramp-adb-barf-unless-okay
+	     v (format "ls -d %s %s %s"
+		       switches
+		       (concat (file-name-as-directory name) ".")
+		       (concat (file-name-as-directory name) ".."))
+	     "Cannot insert directory listing: %s" filename))
+	  (widen))
+	(tramp-adb-sh-fix-ls-output switch-t)))
+    (insert-buffer-substring (tramp-get-buffer v))))
 
 (defun tramp-adb-sh-fix-ls-output (&optional sort-by-time)
   "Androids ls command doesn't insert size column for directories: Emacs dired can't find files. Insert dummy 0 in empty size columns."
