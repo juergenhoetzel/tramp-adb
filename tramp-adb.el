@@ -77,6 +77,8 @@
     (file-remote-p . tramp-handle-file-remote-p)
     (file-directory-p . tramp-adb-handle-file-directory-p)
     (file-symlink-p . tramp-handle-file-symlink-p)
+    ;; FIXME: This is too sloppy.
+    (file-executable-p . file-exists-p)
     (file-exists-p . tramp-adb-handle-file-exists-p)
     (file-readable-p . tramp-handle-file-exists-p)
     (file-writable-p . tramp-adb-handle-file-writable-p)
@@ -100,7 +102,8 @@
     (copy-file . tramp-adb-handle-copy-file)
     (rename-file . tramp-adb-handle-rename-file)
     (process-file . tramp-adb-handle-process-file)
-    (shell-command . tramp-adb-handle-shell-command))
+    (shell-command . tramp-adb-handle-shell-command)
+    (start-file-process . tramp-adb-handle-start-file-process))
   "Alist of handler functions for Tramp ADB method.")
 
 ;;;###tramp-autoload
@@ -764,6 +767,67 @@ PRESERVE-UID-GID and PRESERVE-SELINUX-CONTEXT are completely ignored."
 		(tramp-compat-funcall 'display-message-or-buffer output-buffer)
 	      (pop-to-buffer output-buffer))))))))
 
+;; We use BUFFER also as connection buffer during setup. Because of
+;; this, its original contents must be saved, and restored once
+;; connection has been setup.
+(defun tramp-adb-handle-start-file-process (name buffer program &rest args)
+  "Like `start-file-process' for Tramp files."
+  (with-parsed-tramp-file-name default-directory nil
+    ;; When PROGRAM is nil, we just provide a tty.
+    (let ((command
+	   (when (stringp program)
+	     (format "cd %s; exec %s"
+		     (tramp-shell-quote-argument localname)
+		     (mapconcat 'tramp-shell-quote-argument
+				(cons program args) " "))))
+	  (tramp-process-connection-type
+	   (or (null program) tramp-process-connection-type))
+	  (bmp (and (buffer-live-p buffer) (buffer-modified-p buffer)))
+	  (name1 name)
+	  (i 0))
+      (unwind-protect
+	  (save-excursion
+	    (save-restriction
+	      (unless buffer
+		;; BUFFER can be nil.  We use a temporary buffer.
+		(setq buffer (generate-new-buffer tramp-temp-buffer-name)))
+	      (while (get-process name1)
+		;; NAME must be unique as process name.
+		(setq i (1+ i)
+		      name1 (format "%s<%d>" name i)))
+	      (setq name name1)
+	      ;; Set the new process properties.
+	      (tramp-set-connection-property v "process-name" name)
+	      (tramp-set-connection-property v "process-buffer" buffer)
+	      ;; Activate narrowing in order to save BUFFER contents.
+	      ;; Clear also the modification time; otherwise we might
+	      ;; be interrupted by `verify-visited-file-modtime'.
+	      (with-current-buffer (tramp-get-connection-buffer v)
+		(let ((buffer-undo-list t))
+		  (clear-visited-file-modtime)
+		  (narrow-to-region (point-max) (point-max))
+		  (if command
+		      ;; Send the command.
+		      (tramp-adb-send-command v command)
+		    ;; Open the connection.
+		    (tramp-adb-maybe-open-connection v))))
+	      (let ((p (tramp-get-connection-process v)))
+		;; Set sentinel and query flag for this process.
+		(tramp-set-connection-property p "vector" v)
+		(set-process-sentinel p 'tramp-process-sentinel)
+		(tramp-compat-set-process-query-on-exit-flag p t)
+		;; Return process.
+		p)))
+	;; Save exit.
+	(with-current-buffer (tramp-get-connection-buffer v)
+	  (if (string-match tramp-temp-buffer-name (buffer-name))
+	      (progn
+		(set-process-buffer (tramp-get-connection-process v) nil)
+		(kill-buffer (current-buffer)))
+	    (set-buffer-modified-p bmp)))
+	(tramp-set-connection-property v "process-name" nil)
+	(tramp-set-connection-property v "process-buffer" nil)))))
+
 ;; Android doesn't provide test command
 
 (defun tramp-adb-handle-file-exists-p (filename)
@@ -851,7 +915,7 @@ FMT and ARGS are passed to `error'."
   "Maybe open a connection VEC.
 Does not do anything if a connection is already open, but re-opens the
 connection if a previous connection has died for some reason."
-  (let* ((buf (tramp-get-buffer vec))
+  (let* ((buf (tramp-get-connection-buffer vec))
 	 (p (get-buffer-process buf)))
     (unless
 	(and p (processp p) (memq (process-status p) '(run open)))
