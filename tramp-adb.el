@@ -98,7 +98,8 @@
     (set-file-modes . tramp-adb-handle-set-file-modes)
     (set-file-times . ignore)
     (copy-file . tramp-adb-handle-copy-file)
-    (rename-file . tramp-adb-handle-rename-file))
+    (rename-file . tramp-adb-handle-rename-file)
+    (process-file . tramp-adb-handle-process-file))
   "Alist of handler functions for Tramp ADB method.")
 
 ;;;###tramp-autoload
@@ -574,6 +575,117 @@ PRESERVE-UID-GID and PRESERVE-SELINUX-CONTEXT are completely ignored."
 	;; Rename by copy.
 	(copy-file filename newname ok-if-already-exists t t)
 	(delete-file filename)))))
+
+(defun tramp-adb-handle-process-file
+  (program &optional infile destination display &rest args)
+  "Like `process-file' for Tramp files."
+  ;; The implementation is not complete yet.
+  (when (and (numberp destination) (zerop destination))
+    (error "Implementation does not handle immediate return"))
+
+  (with-parsed-tramp-file-name default-directory nil
+    (let (command input tmpinput stderr tmpstderr outbuf ret)
+      ;; Compute command.
+      (setq command (mapconcat 'tramp-shell-quote-argument
+			       (cons program args) " "))
+      ;; Determine input.
+      (if (null infile)
+	  (setq input "/dev/null")
+	(setq infile (expand-file-name infile))
+	(if (tramp-equal-remote default-directory infile)
+	    ;; INFILE is on the same remote host.
+	    (setq input (with-parsed-tramp-file-name infile nil localname))
+	  ;; INFILE must be copied to remote host.
+	  (setq input (tramp-make-tramp-temp-file v)
+		tmpinput (tramp-make-tramp-file-name method user host input))
+	  (copy-file infile tmpinput t)))
+      (when input (setq command (format "%s <%s" command input)))
+
+      ;; Determine output.
+      (cond
+       ;; Just a buffer.
+       ((bufferp destination)
+	(setq outbuf destination))
+       ;; A buffer name.
+       ((stringp destination)
+	(setq outbuf (get-buffer-create destination)))
+       ;; (REAL-DESTINATION ERROR-DESTINATION)
+       ((consp destination)
+	;; output.
+	(cond
+	 ((bufferp (car destination))
+	  (setq outbuf (car destination)))
+	 ((stringp (car destination))
+	  (setq outbuf (get-buffer-create (car destination))))
+	 ((car destination)
+	  (setq outbuf (current-buffer))))
+	;; stderr.
+	(cond
+	 ((stringp (cadr destination))
+	  (setcar (cdr destination) (expand-file-name (cadr destination)))
+	  (if (tramp-equal-remote default-directory (cadr destination))
+	      ;; stderr is on the same remote host.
+	      (setq stderr (with-parsed-tramp-file-name
+			       (cadr destination) nil localname))
+	    ;; stderr must be copied to remote host.  The temporary
+	    ;; file must be deleted after execution.
+	    (setq stderr (tramp-make-tramp-temp-file v)
+		  tmpstderr (tramp-make-tramp-file-name
+			     method user host stderr))))
+	 ;; stderr to be discarded.
+	 ((null (cadr destination))
+	  (setq stderr "/dev/null"))))
+       ;; 't
+       (destination
+	(setq outbuf (current-buffer))))
+      (when stderr (setq command (format "%s 2>%s" command stderr)))
+
+      ;; Send the command.  It might not return in time, so we protect
+      ;; it.  Call it in a subshell, in order to preserve working
+      ;; directory.
+      (condition-case nil
+	  (progn
+	    (setq ret 0
+		  ret
+		  (tramp-adb-barf-unless-okay
+		   v (format "(cd %s; %s)"
+			     (tramp-shell-quote-argument localname)
+			     command)
+		   ""))
+	    ;; We should show the output anyway.
+	    (when outbuf
+	      (with-current-buffer outbuf
+		(insert-buffer-substring (tramp-get-connection-buffer v)))
+	      (when display (display-buffer outbuf))))
+	;; When the user did interrupt, we should do it also.  We use
+	;; return code -1 as marker.
+	(quit
+	 (kill-buffer (tramp-get-connection-buffer v))
+	 (setq ret -1))
+	;; Handle errors.
+	(error
+	 (kill-buffer (tramp-get-connection-buffer v))
+	 (setq ret 1)))
+
+      ;; Provide error file.
+      (when tmpstderr (rename-file tmpstderr (cadr destination) t))
+
+      ;; Cleanup.  We remove all file cache values for the connection,
+      ;; because the remote process could have changed them.
+      (when tmpinput (delete-file tmpinput))
+
+      ;; `process-file-side-effects' has been introduced with GNU
+      ;; Emacs 23.2.  If set to `nil', no remote file will be changed
+      ;; by `program'.  If it doesn't exist, we assume its default
+      ;; value 't'.
+      (unless (and (boundp 'process-file-side-effects)
+		   (not (symbol-value 'process-file-side-effects)))
+        (tramp-flush-directory-property v ""))
+
+      ;; Return exit status.
+      (if (equal ret -1)
+	  (keyboard-quit)
+	ret))))
 
 ;; Android doesn't provide test command
 
