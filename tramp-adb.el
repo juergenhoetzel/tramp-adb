@@ -776,7 +776,7 @@ PRESERVE-UID-GID and PRESERVE-SELINUX-CONTEXT are completely ignored."
     ;; When PROGRAM is nil, we just provide a tty.
     (let ((command
 	   (when (stringp program)
-	     (format "cd %s; exec %s"
+	     (format "cd %s; %s"
 		     (tramp-shell-quote-argument localname)
 		     (mapconcat 'tramp-shell-quote-argument
 				(cons program args) " "))))
@@ -929,7 +929,7 @@ connection if a previous connection has died for some reason."
 			 (list "shell")))
 		 (p (let ((default-directory
 			    (tramp-compat-temporary-file-directory)))
-		      (apply 'start-process (tramp-buffer-name vec) buf
+		      (apply 'start-process (tramp-get-connection-name vec) buf
 			     (tramp-adb-program) args))))
 	    (tramp-message
 	     vec 6 "%s" (mapconcat 'identity (process-command p) " "))
