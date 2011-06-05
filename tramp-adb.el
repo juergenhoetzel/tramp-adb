@@ -92,7 +92,7 @@
     (file-modes . tramp-handle-file-modes)
     (expand-file-name . tramp-adb-handle-expand-file-name)
     (find-backup-file-name . tramp-handle-find-backup-file-name)
-    (directory-files . tramp-adb-handle-directory-files)
+    (directory-files . tramp-handle-directory-files)
     (make-directory . tramp-adb-handle-make-directory)
     (delete-directory . tramp-adb-handle-delete-directory)
     (delete-file . tramp-adb-handle-delete-file)
@@ -387,15 +387,6 @@ Convert (\"-al\") to (\"-a\" \"-l\").  Remove arguments like \"--dired\"."
     (setq posb (match-end 0))
     (string-lessp (substring a posa) (substring b posb))))
 
-(defun tramp-adb-handle-directory-files (dir &optional full match nosort files-only)
-  "Like `directory-files' for Tramp files."
-  (with-parsed-tramp-file-name dir nil
-    (tramp-adb-send-command
-     v (format "ls %s" (tramp-shell-quote-argument localname)))
-    (with-current-buffer (tramp-get-buffer v)
-      (remove-if (lambda (l) (string-match  "^[[:space:]]*$" l))
-		 (split-string (buffer-string) "\n")))))
-
 (defun tramp-adb-handle-make-directory (dir &optional parents)
   "Like `make-directory' for Tramp files."
   (setq dir (expand-file-name dir))
@@ -437,12 +428,16 @@ Convert (\"-al\") to (\"-a\" \"-l\").  Remove arguments like \"--dired\"."
    (with-parsed-tramp-file-name directory nil
      (with-file-property v localname "file-name-all-completions"
        (save-match-data
+	 (tramp-adb-send-command
+	  v (format "ls %s" (tramp-shell-quote-argument localname)))
 	 (mapcar
 	  (lambda (f)
 	    (if (file-directory-p f)
 		(file-name-as-directory f)
 	      f))
-	  (directory-files directory)))))))
+	  (with-current-buffer (tramp-get-buffer v)
+	    (remove-if (lambda (l) (string-match  "^[[:space:]]*$" l))
+		       (split-string (buffer-string) "\n")))))))))
 
 (defun tramp-adb-handle-file-local-copy (filename)
   "Like `file-local-copy' for Tramp files."
@@ -902,12 +897,12 @@ FMT and ARGS are passed to `error'."
     (if (tramp-wait-for-regexp proc timeout tramp-adb-prompt)
 	(let (buffer-read-only)
 	  (goto-char (point-min))
-	  (when (search-forward tramp-adb-prompt (point-at-eol) t)
+	  (when (re-search-forward tramp-adb-prompt (point-at-eol) t)
 	    (forward-line 1)
 	    (delete-region (point-min) (point)))
 	  ;; Delete the prompt.
 	  (goto-char (point-max))
-	  (search-backward tramp-adb-prompt nil t)
+	  (re-search-backward tramp-adb-prompt nil t)
 	  (delete-region (point) (point-max)))
       (if timeout
 	  (tramp-error
