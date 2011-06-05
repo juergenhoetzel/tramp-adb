@@ -35,6 +35,12 @@
 
 (require 'tramp)
 
+;; In Tramp 2.2.2, `with-progress-reporter' has been renamed to
+;; `tramp-with-progress-reporter'.  Until this version is commonly
+;; available, we declare it here.
+(unless (fboundp 'tramp-with-progress-reporter)
+  (defalias 'tramp-with-progress-reporter 'with-progress-reporter))
+
 (defcustom tramp-adb-sdk-dir "~/Android/sdk"
   "Set to the directory containing the Android SDK."
   :type 'string
@@ -446,7 +452,7 @@ Convert (\"-al\") to (\"-a\" \"-l\").  Remove arguments like \"--dired\"."
        v 'file-error
        "Cannot make local copy of non-existing file `%s'" filename))
     (let ((tmpfile (tramp-compat-make-temp-file filename)))
-      (with-progress-reporter
+      (tramp-with-progress-reporter
 	  v 3 (format "Fetching %s to tmp file %s" filename tmpfile)
 	(when (tramp-adb-execute-adb-command v "pull" localname tmpfile)
 	  (delete-file tmpfile)
@@ -485,7 +491,7 @@ Convert (\"-al\") to (\"-a\" \"-l\").  Remove arguments like \"--dired\"."
       (tramp-run-real-handler
        'write-region
        (list start end tmpfile append 'no-message lockname confirm))
-      (with-progress-reporter
+      (tramp-with-progress-reporter
 	  v 3 (format "Moving tmp file %s to %s" tmpfile filename)
 	(unwind-protect
 	    (when (tramp-adb-execute-adb-command v "push" tmpfile localname)
@@ -515,7 +521,7 @@ PRESERVE-UID-GID and PRESERVE-SELINUX-CONTEXT are completely ignored."
 
   (if (file-directory-p filename)
       (copy-directory filename newname keep-date)
-    (with-progress-reporter
+    (tramp-with-progress-reporter
 	(tramp-dissect-file-name (if (file-remote-p filename) filename newname))
 	0 (format "Copying %s to %s" filename newname)
 
@@ -559,7 +565,8 @@ PRESERVE-UID-GID and PRESERVE-SELINUX-CONTEXT are completely ignored."
 
   (with-parsed-tramp-file-name
       (if (file-remote-p filename) filename newname) nil
-    (with-progress-reporter v 0 (format "Renaming %s to %s" newname filename)
+    (tramp-with-progress-reporter
+	v 0 (format "Renaming %s to %s" newname filename)
 
       (if (and (tramp-equal-remote filename newname)
 	       (not (file-directory-p filename)))
@@ -921,7 +928,7 @@ connection if a previous connection has died for some reason."
 	(and p (processp p) (memq (process-status p) '(run open)))
       (save-match-data
 	(when (and p (processp p)) (delete-process p))
-	(with-progress-reporter vec 3 "Opening adb shell connection"
+	(tramp-with-progress-reporter vec 3 "Opening adb shell connection"
 	  (let* ((coding-system-for-read 'utf-8-dos) ;is this correct?
 		 (process-connection-type tramp-process-connection-type)
 		 (args (if (tramp-file-name-host vec)
