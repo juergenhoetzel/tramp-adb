@@ -179,10 +179,7 @@ pass to the OPERATION."
 
 (defun tramp-adb-handle-file-directory-p (filename)
   "Like `file-directory-p' for Tramp files."
-  (let ((symlink (file-symlink-p filename)))
-    (if (stringp symlink)
-	(file-directory-p symlink)
-      (car (file-attributes filename)))))
+  (car (file-attributes (file-truename filename))))
 
 ;; This is derived from `tramp-sh-handle-file-truename'.  Maybe the
 ;; code could be shared?
@@ -392,8 +389,9 @@ Convert (\"-al\") to (\"-a\" \"-l\").  Remove arguments like \"--dired\"."
   (setq dir (expand-file-name dir))
   (with-parsed-tramp-file-name dir nil
     (when parents
-      (tramp-message
-       v 5 "mkdir doesn't handle \"-p\" switch: mkdir \"%s\"" localname))
+      (let ((par (expand-file-name ".." dir)))
+	(unless (file-directory-p par)
+	  (make-directory par parents))))
     (tramp-adb-barf-unless-okay
      v (format "mkdir %s" (tramp-shell-quote-argument localname))
      "Couldn't make directory %s" dir)
@@ -458,8 +456,9 @@ Convert (\"-al\") to (\"-a\" \"-l\").  Remove arguments like \"--dired\"."
 
 (defun tramp-adb-handle-file-writable-p (filename)
   (with-parsed-tramp-file-name filename nil
-    ;; missing "test" command on Android devices
-    (tramp-message v 5 "not implemented yet (Assuming /data/data is writable) :%s" localname)
+    ;; Missing "test" command on Android devices.
+    (tramp-message
+     v 5 "not implemented yet (Assuming /data/data is writable) :%s" localname)
     (let ((rw-path "/data/data"))
       (and (>= (length localname) (length rw-path))
 	   (string= (substring localname 0 (length rw-path))
@@ -515,7 +514,7 @@ PRESERVE-UID-GID and PRESERVE-SELINUX-CONTEXT are completely ignored."
 	newname (expand-file-name newname))
 
   (if (file-directory-p filename)
-      (copy-directory filename newname keep-date)
+      (copy-directory filename newname keep-date t)
     (tramp-with-progress-reporter
 	(tramp-dissect-file-name (if (file-remote-p filename) filename newname))
 	0 (format "Copying %s to %s" filename newname)
