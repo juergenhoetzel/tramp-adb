@@ -440,7 +440,7 @@ Convert (\"-al\") to (\"-a\" \"-l\").  Remove arguments like \"--dired\"."
 (defun tramp-adb-handle-file-local-copy (filename)
   "Like `file-local-copy' for Tramp files."
   (with-parsed-tramp-file-name filename nil
-    (unless (file-exists-p filename)
+    (unless (file-exists-p (file-truename filename))
       (tramp-error
        v 'file-error
        "Cannot make local copy of non-existing file `%s'" filename))
