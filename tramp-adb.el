@@ -316,7 +316,7 @@ Convert (\"-al\") to (\"-a\" \"-l\").  Remove arguments like \"--dired\"."
   "Like `insert-directory' for Tramp files."
   (when (stringp switches)
     (setq switches (tramp-adb--gnu-switches-to-ash (split-string switches))))
-  (with-parsed-tramp-file-name (expand-file-name filename) nil
+  (with-parsed-tramp-file-name (file-truename filename) nil
     (with-current-buffer (tramp-get-buffer v)
       (let ((name (tramp-shell-quote-argument (directory-file-name localname)))
 	    (switch-d (member "-d" switches))
