@@ -25,9 +25,4 @@ Access Files on Android device using Emacs Dired mode:
 
 * non-root-access: Due to security it is not possible to access non-root devices
 
-## Tramp Handlers
-
-* ```tramp-adb-handle-make-directory```: Handle parents
-* ```tramp-adb-maybe-open-connection ```: use (tramp-file-name-host vec) to select device
-
 
